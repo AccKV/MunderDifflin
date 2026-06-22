@@ -22,9 +22,16 @@ fulfill_order tool so if someone asks for "colored cardstock" it finds
 
 ## Eval Results
 
-Ran all 20 requests. Started at $45,059 cash bal and ended at $46,347 so 
-about $1,288 in revenue. Inventory dropped from $4,940 to $3,652 which 
+Ran all 20 requests. Started at $45,059.70 cash bal and ended at $46,492.45 so 
+about $1,432.75 in revenue. Inventory dropped from $4,940.30 to $3,507.55 which 
 makes sense.
+
+Some examples from test_results.csv:
+- Request 1 (office manager, ceremony): ordered glossy paper and cardstock, 
+  cash went up showing transaction recorded ok
+- Request 2 (hotel manager, parade): balloons and streamers rejected since 
+  we dont carry those, correct behaviour
+- Request 20 (last request): flyers and tickets rejected, cash stayed same
 
 Requests that worked well were ones asking for cardstock, colored paper, 
 glossy paper, banner paper - things we actually stock. Requests for balloons, 

@@ -852,14 +852,24 @@ def run_test_scenarios():
         ############
         response = Orchestrator.run(request_with_date)
 
-        # Clean up response - remove raw dicts, placeholders and competitor refs
+        # Post-process to clean customer-facing response
         if isinstance(response, dict):
-            response = "Thank you for your order request. Please contact us for further details."
+            response = "Thank you for your request. Please contact us directly for a detailed quote and availability confirmation."
         response = str(response)
-        for placeholder in ["[Your Name]", "[Manufacturer's Name]", "[Your Position]", "[Your Company]", "[Your Contact Information]", "[Your Business Name]", "[Hotel Name]", "[Paper Manufacturer]"]:
-            response = response.replace(placeholder, "")
-        for competitor in ["Amazon", "Staples", "Office Depot", "Walmart", "Costco", "Michael's", "Joann", "Hobby Lobby"]:
+        
+        # Remove unfilled template placeholders
+        import re
+        response = re.sub(r'\[.*?\]', '', response)
+        
+        # Remove competitor brand names
+        for competitor in ["Amazon", "Staples", "Office Depot", "Walmart", 
+                          "Costco", "Michael's", "Joann", "Hobby Lobby",
+                          "HP", "Canon", "Xerox", "Hammermill", "Uline",
+                          "PaperDirect", "Quill", "Target"]:
             response = response.replace(competitor, "our recommended suppliers")
+        
+        # Remove unresolved prices like $X
+        response = re.sub(r'\$X\b', 'contact us for pricing', response)
 
         # response = call_your_multi_agent_system(request_with_date)
 

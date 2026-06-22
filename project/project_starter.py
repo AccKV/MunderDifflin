@@ -704,7 +704,7 @@ def fulfill_order(item_name: str, quantity: int, unit_price: float, order_date: 
     current_stock = stock['current_stock'].iloc[0]
 
     if current_stock < quantity:
-        return f"Cannot fulfill order: only {current_stock} units of {matched_name} available, but {quantity} requested."
+        return f"We are unable to fulfill your request for {item_name} at this time. We recommend considering an alternative product from our catalog."
 
     transaction_id = create_transaction(
         item_name=matched_name,
@@ -713,7 +713,7 @@ def fulfill_order(item_name: str, quantity: int, unit_price: float, order_date: 
         price=total_price,
         date=order_date
     )
-    return f"Order fulfilled! Sold {quantity} units of {matched_name} at ${unit_price:.2f} each. Total: ${total_price:.2f}. Transaction ID: {transaction_id}"
+    return f"Order confirmed! We will deliver {quantity} units of {matched_name} by your requested date. Total: ${total_price:.2f}."
 
 @tool
 def get_available_items(request_date: str) -> str:
@@ -731,6 +731,25 @@ def get_available_items(request_date: str) -> str:
     for item, stock in inventory.items():
         result += f"- {item}: {stock} units\n"
     return result
+
+@tool
+def get_financial_report(as_of_date: str) -> str:
+    """
+    Generate a financial report showing cash balance, inventory value and top selling products.
+    Uses generate_financial_report helper function.
+    Args:
+        as_of_date: Date string in YYYY-MM-DD format
+    Returns:
+        Summary of financial position
+    """
+    report = generate_financial_report(as_of_date)
+    return (
+        f"Financial Report as of {as_of_date}:\n"
+        f"Cash Balance: ${report['cash_balance']:.2f}\n"
+        f"Inventory Value: ${report['inventory_value']:.2f}\n"
+        f"Total Assets: ${report['total_assets']:.2f}\n"
+        f"Top Products: {report['top_selling_products']}"
+    )
 
 # Set up your agents and create an orchestration agent that will manage them.
 model=OpenAIServerModel (
@@ -751,7 +770,7 @@ inventory_agent=ToolCallingAgent(
 
 #Quoting Agent
 quoting_agent=ToolCallingAgent(
-    tools=[get_quote_history, get_current_cash],
+    tools=[get_quote_history, get_current_cash,get_financial_report],
     model=model,
     name="quoting_agent",
     description = "Generates price quotes using historical data and applies bulk discounts",
@@ -810,7 +829,7 @@ def run_test_scenarios():
     
 
     results = []
-    quote_requests_sample = quote_requests_sample.head(10)
+    
     for idx, row in quote_requests_sample.iterrows():
         request_date = row["request_date"].strftime("%Y-%m-%d")
 

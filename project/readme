@@ -1,0 +1,51 @@
+# Munder Difflin Paper Co - Multi Agent System
+
+## What this does
+
+This is my multi agent system for the Munder Difflin paper company project. 
+The system takes customer requests for paper supplies and tries to fufill them 
+using our inventory database. If somthing isnt available it tells the customer.
+
+## Agents
+
+### Orchestrator
+The main agent that recives customer requests and decides what to do.
+It passes the inventory list to each request so the other agents know 
+what items we actually have in stock.
+
+### Inventory Agent
+Checks whats in stock. Has tools for:
+- check_inventory - gets everything in stock on a given date
+- get_available_items - returns a formatted list of stock
+- check_item_stock - checks a specific item
+- check_delivery_date - estimates when supplier can deliver
+
+### Quoting Agent
+Looks at past quotes and checks cash balance before approving orders.
+Tools: get_quote_history, get_current_cash
+
+### Ordering Agent
+Actually places the orders and records them in the database.
+Tool: fulfill_order - this one does fuzzy matching on item names 
+so "A4 glossy paper" matches to "Glossy paper" in our db.
+
+## How it runs
+
+1. Load the database with inventory and past quotes
+2. Read quote_requests_sample.csv 
+3. For each request, pass it to the orchestrator with todays inventory
+4. Orchestrator delegates to the right agents
+5. Results get saved to test_results.csv
+
+## Results
+
+Started with $45,059 cash. After processing all the requests 
+ended up with $45,154 so we made about $95 in sales.
+
+Some orders couldnt be fullfilled because customers asked for things 
+like balloons and streamers which we dont sell. Those got rejected 
+with an explanation.
+
+## Framework used
+
+smolagents with OpenAI gpt-4o-mini

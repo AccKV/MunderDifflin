@@ -590,30 +590,198 @@ def search_quote_history(search_terms: List[str], limit: int = 5) -> List[Dict]:
 
 
 # Set up and load your env parameters and instantiate your model.
-
+dotenv.load_dotenv('.env')
+OPENAI_API_KEY = os.getenv('UDACITY_OPENAI_API_KEY')
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://openai.vocareum.com/v1')
 
 """Set up tools for your agents to use, these should be methods that combine the database functions above
  and apply criteria to them to ensure that the flow of the system is correct."""
 
 
 # Tools for inventory agent
+from smolagents import tool, OpenAIServerModel, CodeAgent, ToolCallingAgent
+@tool
+def check_inventory(as_of_date: str) -> dict:
+    """
+    check all available inventory as of a given date.
+    Args:
+        as_of_date: Date String in YYY-MM-DD format
+    Returns:
+        Dictionary of item names and their stock levels
+    """
+    return get_all_inventory (as_of_date)
+
+@tool
+def check_item_stock (item_name: str, as_of_date: str) -> str:
+    """
+    check the stock level of a specific item as of a given date.
+    Args:
+        item_name: The name of the item to check
+        as_of_date: Date string in YYYY-MM-DD format
+    Returns:
+        String describing the current stock level
+    """
+    result =get_stock_level (item_name, as_of_date)
+    stock = result ['current_stock'].iloc[0]
+    return f"{item_name}:{stock} units in stock as of {as_of_date}"
+
+@tool
+def check_delivery_date (order_date: str, quantity: int) -> str:
+    """
+    Estimate the delivery date from supplier based on quantiy ordered.
+    Args:
+        order_date: Date string in YYYY-MM-DD format
+        quantity: Number of units to order
+    Returns:
+    Estimated delivery date string
+    """
+    return get_supplier_delivery_date (order_date, quantity)
+
 
 
 # Tools for quoting agent
+@tool
+def get_quote_history(search_terms: list) -> list:
+    """
+    Search historical quotes for similar past orders.
+    Args:
+        search_terms: List of keywords to search for in quote history
+    Returns:
+        List of matching historical quotes with pricing details
+    """
+    return search_quote_history(search_terms, limit=5)
+
+@tool
+def get_current_cash(as_of_date: str) -> str:
+    """
+    Get the current cash balance as of a given date.
+    Args:
+        as_of_date: Date string in YYYY-MM-DD format
+    Returns:
+        String describing the current cash balance
+    """
+    balance = get_cash_balance(as_of_date)
+    return f"Current cash bal as of {as_of_date}: ${balance:.2f}"
 
 
 # Tools for ordering agent
+@tool
+def fulfill_order(item_name: str, quantity: int, unit_price: float, order_date: str) -> str:
+    """
+    Fulfill a customer order by recording a sales transaction.
+    Args:
+        item_name: Name of the item being sold
+        quantity: Number of units sold
+        unit_price: Price per unit (use 0 to auto-lookup from inventory)
+        order_date: Date string in YYYY-MM-DD format
+    Returns:
+        Confirmation message with transaction details
+    """
+    inventory = get_all_inventory(order_date)
+    
+    # Find matching item name
+    matched_name = None
+    for inv_item in inventory.keys():
+        if item_name.lower() in inv_item.lower() or inv_item.lower() in item_name.lower():
+            matched_name = inv_item
+            break
+    
+    if not matched_name:
+        matched_name = item_name
 
+    # Auto-lokup unit price from inventory table if not provided
+    if unit_price == 0:
+        inv_df = pd.read_sql(
+            "SELECT unit_price FROM inventory WHERE item_name = :name",
+            db_engine,
+            params={"name": matched_name}
+        )
+        if not inv_df.empty:
+            unit_price = float(inv_df.iloc[0]["unit_price"])
+
+    total_price = quantity * unit_price
+    stock = get_stock_level(matched_name, order_date)
+    current_stock = stock['current_stock'].iloc[0]
+
+    if current_stock < quantity:
+        return f"Cannot fulfill order: only {current_stock} units of {matched_name} available, but {quantity} requested."
+
+    transaction_id = create_transaction(
+        item_name=matched_name,
+        transaction_type='sales',
+        quantity=quantity,
+        price=total_price,
+        date=order_date
+    )
+    return f"Order fulfilled! Sold {quantity} units of {matched_name} at ${unit_price:.2f} each. Total: ${total_price:.2f}. Transaction ID: {transaction_id}"
+
+@tool
+def get_available_items(request_date: str) -> str:
+    """
+    Get a formatted list of all available items in inventory.
+    Args:
+        request_date: Date string in YYYY-MM-DD format
+    Returns:
+        Formatted string listing all available items with stock levels
+    """
+    inventory = get_all_inventory(request_date)
+    if not inventory:
+        return "No items currently in stock."
+    result = "Available items in stock:\n"
+    for item, stock in inventory.items():
+        result += f"- {item}: {stock} units\n"
+    return result
 
 # Set up your agents and create an orchestration agent that will manage them.
+model=OpenAIServerModel (
+    model_id='gpt-4o-mini',
+    api_base = OPENAI_BASE_URL,
+    api_key = OPENAI_API_KEY
+)
 
+
+# Inv Agent
+inventory_agent=ToolCallingAgent(
+    tools=[check_inventory,check_item_stock,check_delivery_date,get_available_items],
+    model = model,
+    name = "inventory_agent",
+    description ="Checks inventory levels, stock for specific items, and supplier delivery dates.",
+    max_steps=3
+)
+
+#Quoting Agent
+quoting_agent=ToolCallingAgent(
+    tools=[get_quote_history, get_current_cash],
+    model=model,
+    name="quoting_agent",
+    description = "Generates price quotes using historical data and applies bulk discounts",
+    max_steps=3
+)
+
+#Ordering agent
+ordering_agent=ToolCallingAgent(
+    tools=[fulfill_order],
+    model=model,
+    name="ordering_agent",
+    description="Finalizes sales transactions and records orders in the database",
+    max_steps=3
+)
+
+#Orchestrator agent
+Orchestrator = CodeAgent(
+    tools=[],
+    model=model,
+    managed_agents=[inventory_agent, quoting_agent, ordering_agent],
+    additional_authorized_imports=["json","datetime"],
+    max_steps=5
+)
 
 # Run your test scenarios by writing them here. Make sure to keep track of them.
 
 def run_test_scenarios():
     
     print("Initializing Database...")
-    init_database()
+    init_database(db_engine)
     try:
         quote_requests_sample = pd.read_csv("quote_requests_sample.csv")
         quote_requests_sample["request_date"] = pd.to_datetime(
@@ -639,7 +807,10 @@ def run_test_scenarios():
     ############
     ############
 
+    
+
     results = []
+    quote_requests_sample = quote_requests_sample.head(10)
     for idx, row in quote_requests_sample.iterrows():
         request_date = row["request_date"].strftime("%Y-%m-%d")
 
@@ -650,7 +821,8 @@ def run_test_scenarios():
         print(f"Inventory Value: ${current_inventory:.2f}")
 
         # Process request
-        request_with_date = f"{row['request']} (Date of request: {request_date})"
+        available = get_available_items(request_date)
+        request_with_date = f"{row['request']} (Date of request: {request_date})\n\nOur available inventory:\n{available}"
 
         ############
         ############
@@ -659,6 +831,7 @@ def run_test_scenarios():
         ############
         ############
         ############
+        response=Orchestrator.run(request_with_date)
 
         # response = call_your_multi_agent_system(request_with_date)
 

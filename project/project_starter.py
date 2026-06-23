@@ -796,7 +796,20 @@ Orchestrator = CodeAgent(
 )
 
 # Run your test scenarios by writing them here. Make sure to keep track of them.
+import re
 
+def sanitize_customer_response(response: object) -> str:
+    text = str(response)
+    text = re.sub(r'<code>.*?</code>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    text = re.sub(r'Calling tools:.*', '', text, flags=re.DOTALL)
+    text = re.sub(r'.*ordering_agent.*', '', text)
+    text = re.sub(r'.*ToolCallingAgent.*', '', text)
+    text = re.sub(r'\[.*?\]', '', text)
+    text = text.strip()
+    if not text:
+        return 'Thank you for your request. We reviewed availability and will follow up with a confirmed quote.'
+    return text
 def run_test_scenarios():
     
     print("Initializing Database...")
@@ -852,25 +865,7 @@ def run_test_scenarios():
         ############
         response = Orchestrator.run(request_with_date)
 
-        # Post-process to clean customer-facing response
-        if isinstance(response, dict):
-            response = "Thank you for your request. Please contact us directly for a detailed quote and availability confirmation."
-        response = str(response)
-        
-        # Remove unfilled template placeholders
-        import re
-        response = re.sub(r'\[.*?\]', '', response)
-        
-        # Remove competitor brand names
-        for competitor in ["Amazon", "Staples", "Office Depot", "Walmart", 
-                          "Costco", "Michael's", "Joann", "Hobby Lobby",
-                          "HP", "Canon", "Xerox", "Hammermill", "Uline",
-                          "PaperDirect", "Quill", "Target"]:
-            response = response.replace(competitor, "our recommended suppliers")
-        
-        # Remove unresolved prices like $X
-        response = re.sub(r'\$X\b', 'contact us for pricing', response)
-
+        response = sanitize_customer_response(response)
         # response = call_your_multi_agent_system(request_with_date)
 
         # Update state

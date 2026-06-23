@@ -31,8 +31,7 @@ Also auto looks up the unit price if the agent passes 0.
 
 ## Eval Results
 
-Ran all 20 requests from quote_requests_sample.csv. Started at $45,059.70 cash bal and ended at $45,819.70 so 
-about $760.00 in revenue. Inventory dropped from $4,940.30 to $4,180.30
+Ran all 20 requests from quote_requests_sample.csv. Started at $45,059.70 cash bal and ended at $46,136.35 so about $1,076.65 in revenue. Inventory dropped from $4,940.30 to $3,863.65.
 
 A key strength was the fuzzy item name matching in fulfill_order. Without it 
 almost every order failed because customers say "glossy A4 paper" but our db 
